@@ -27,8 +27,14 @@ const upload = multer({
 });
 
 app.use(express.json({ limit: "1mb" }));
+app.use((request, response, next) => {
+  if (request.path === "/" || request.path === "/index.html") {
+    response.setHeader("Cache-Control", "no-store");
+  }
+  next();
+});
+
 app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "7d" }));
-app.use("/vendor", express.static(path.join(ROOT_DIR, "node_modules", "sortablejs")));
 app.use(express.static(PUBLIC_DIR, { extensions: ["html"] }));
 
 function sanitizeName(value) {

@@ -426,14 +426,7 @@ a {
 }
 
 .tile-actions {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 2;
-  display: flex;
-  gap: 8px;
-  opacity: 1;
-  transition: opacity 180ms ease;
+  display: none;
 }
 
 .tile-action-button {
@@ -452,6 +445,13 @@ a {
 .tile-action-button:focus-visible {
   outline: 2px solid rgba(0, 224, 255, 0.55);
   outline-offset: 2px;
+}
+
+.shortcut-toolbar {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .shortcut-placeholder .shortcut-card {

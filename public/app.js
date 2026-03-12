@@ -1,6 +1,7 @@
 const state = {
   shortcuts: [],
   sortable: null,
+  sortableLoader: null,
   dragLockUntil: 0,
   toastTimer: 0,
   editingShortcutId: "",
@@ -108,6 +109,41 @@ function upsertShortcut(shortcut) {
   state.shortcuts.sort((left, right) => left.order - right.order);
 }
 
+function ensureSortableLoaded() {
+  if (typeof Sortable !== "undefined") {
+    return Promise.resolve(Sortable);
+  }
+
+  if (state.sortableLoader) {
+    return state.sortableLoader;
+  }
+
+  state.sortableLoader = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector('script[data-sortable-loader="dynamic"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(globalThis.Sortable));
+      existingScript.addEventListener("error", () => reject(new Error("Drag and drop failed to load.")));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "/vendor/Sortable.min.js?v=20260312-2";
+    script.async = true;
+    script.dataset.sortableLoader = "dynamic";
+    script.onload = () => {
+      if (typeof Sortable === "undefined") {
+        reject(new Error("Drag and drop failed to load."));
+        return;
+      }
+      resolve(Sortable);
+    };
+    script.onerror = () => reject(new Error("Drag and drop failed to load."));
+    document.head.append(script);
+  });
+
+  return state.sortableLoader;
+}
+
 function createShortcutElement(shortcut) {
   const item = document.createElement("li");
   item.className = "shortcut-item";
@@ -189,8 +225,37 @@ function createShortcutElement(shortcut) {
   meta.className = "shortcut-meta";
   meta.textContent = "Drag to reorder";
 
+  const toolbar = document.createElement("div");
+  toolbar.className = "shortcut-toolbar";
+
+  const toolbarEdit = editButton.cloneNode(true);
+  toolbarEdit.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openModal("edit", shortcut);
+  });
+
+  const toolbarDelete = deleteButton.cloneNode(true);
+  toolbarDelete.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    if (!window.confirm(`Delete the shortcut "${shortcut.name}"?`)) {
+      return;
+    }
+
+    try {
+      const payload = await requestJson(`/api/shortcuts/${shortcut.id}`, {
+        method: "DELETE",
+      });
+      state.shortcuts = payload.shortcuts;
+      renderShortcuts();
+      showToast("Shortcut removed.");
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+
   iconFrame.append(image, fallback);
-  copy.append(title, host, meta);
+  toolbar.append(toolbarEdit, toolbarDelete);
+  copy.append(title, host, meta, toolbar);
   body.append(iconFrame, copy);
   actions.append(editButton, deleteButton);
   card.append(actions, body);
@@ -222,7 +287,15 @@ function renderShortcuts() {
   });
 
   if (!state.sortable) {
-    initSortable();
+    ensureSortableLoaded()
+      .then(() => {
+        if (!state.sortable) {
+          initSortable();
+        }
+      })
+      .catch((error) => {
+        showToast(error.message);
+      });
   }
 }
 

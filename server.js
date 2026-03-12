@@ -456,6 +456,9 @@ app.put("/api/shortcuts/order", async (request, response, next) => {
     if (orderedIds.length !== shortcuts.length) {
       throw new Error("Shortcut order update did not include every shortcut.");
     }
+    if (new Set(orderedIds).size !== orderedIds.length) {
+      throw new Error("Shortcut order update contained duplicate shortcuts.");
+    }
 
     const shortcutMap = new Map(shortcuts.map((shortcut) => [shortcut.id, shortcut]));
     const reordered = orderedIds.map((id) => {

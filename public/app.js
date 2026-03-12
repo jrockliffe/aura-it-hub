@@ -127,7 +127,7 @@ function ensureSortableLoaded() {
     }
 
     const script = document.createElement("script");
-    script.src = "/vendor/Sortable.min.js?v=20260312-2";
+    script.src = "/vendor/Sortable.min.js?v=20260312-3";
     script.async = true;
     script.dataset.sortableLoader = "dynamic";
     script.onload = () => {
@@ -306,7 +306,12 @@ async function loadShortcuts() {
 
 async function persistOrder() {
   const orderedIds = [...elements.grid.children].map((item) => item.dataset.shortcutId);
-  state.shortcuts = await requestJson("/api/shortcuts/order", {
+
+  if (orderedIds.length !== state.shortcuts.length || new Set(orderedIds).size !== orderedIds.length) {
+    throw new Error("The drag order became unstable. Please try again.");
+  }
+
+  return requestJson("/api/shortcuts/order", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ orderedIds }),
@@ -340,16 +345,14 @@ function initSortable() {
       state.dragLockUntil = Date.now() + 250;
 
       try {
-        await persistOrder();
+        state.shortcuts = await persistOrder();
       } catch (error) {
         showToast(error.message);
         await loadShortcuts();
         return;
       }
 
-      const orderedIds = [...elements.grid.children].map((item) => item.dataset.shortcutId);
-      const lookup = new Map(state.shortcuts.map((shortcut) => [shortcut.id, shortcut]));
-      state.shortcuts = orderedIds.map((id) => lookup.get(id)).filter(Boolean);
+      renderShortcuts();
       showToast("Shortcut order updated.");
     },
   });

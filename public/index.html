@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to AURA IT HUB</title>
+    <meta
+      name="description"
+      content="AURA IT HUB is a glass-styled shortcuts dashboard for your team."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="icon" href="/logo-icon-new.png">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="wallpaper-base" aria-hidden="true"></div>
+    <div class="wallpaper-grid" aria-hidden="true"></div>
+    <div class="wallpaper-vignette" aria-hidden="true"></div>
+    <div class="orb orb-cyan" aria-hidden="true"></div>
+    <div class="orb orb-violet" aria-hidden="true"></div>
+    <div class="orb orb-blue" aria-hidden="true"></div>
+
+    <main class="shell">
+      <header class="topbar glass-panel">
+        <div class="brand">
+          <img src="/logo-icon-new.png" alt="AURA IT logo" class="brand-mark">
+          <div>
+            <p class="eyebrow">AURA IT</p>
+            <h1>Welcome to AURA IT HUB</h1>
+          </div>
+        </div>
+
+        <button type="button" id="open-modal-button" class="gradient-button">
+          Add Shortcut
+        </button>
+      </header>
+
+      <section class="hero glass-panel">
+        <div class="hero-copy">
+          <p class="hero-kicker">Shared shortcuts, arranged your way.</p>
+          <h2>Your team links in one calm, glass-like workspace.</h2>
+          <p class="hero-text">
+            Add shortcuts with a custom icon or let the HUB fetch the website icon
+            for you. Drag any tile to reorder the layout.
+          </p>
+        </div>
+      </section>
+
+      <section class="tiles-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Workspace</p>
+            <h3>Shortcuts</h3>
+          </div>
+          <p class="section-note">Drag any tile to move it. Click a tile to open its link.</p>
+        </div>
+
+        <div id="empty-state" class="empty-state glass-panel hidden">
+          <p class="empty-title">No shortcuts yet.</p>
+          <p class="empty-text">
+            Use the button in the top-right to create your first AURA IT HUB tile.
+          </p>
+        </div>
+
+        <ul id="shortcuts-grid" class="shortcuts-grid" aria-live="polite"></ul>
+      </section>
+    </main>
+
+    <div id="modal-backdrop" class="modal-backdrop hidden"></div>
+    <section
+      id="shortcut-modal"
+      class="modal glass-panel hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Create shortcut</p>
+          <h4 id="modal-title">Add a new HUB tile</h4>
+        </div>
+        <button type="button" id="close-modal-button" class="close-button" aria-label="Close dialog">
+          x
+        </button>
+      </div>
+
+      <form id="shortcut-form" class="shortcut-form">
+        <label class="field">
+          <span>Shortcut name</span>
+          <input type="text" name="name" maxlength="80" placeholder="AURA Remote Support" required>
+        </label>
+
+        <label class="field">
+          <span>Website link</span>
+          <input type="url" name="url" placeholder="https://aurait.com.au" required>
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Upload custom icon</span>
+            <input type="file" name="iconFile" accept=".png,.jpg,.jpeg,.gif,.svg,.webp,.ico,image/*">
+          </label>
+
+          <label class="field">
+            <span>Or paste an icon URL</span>
+            <input type="url" name="iconUrl" placeholder="https://example.com/icon.png">
+          </label>
+        </div>
+
+        <p class="field-help">
+          Leave both icon fields empty and AURA IT HUB will fetch the website icon automatically.
+        </p>
+
+        <div class="modal-actions">
+          <button type="button" id="cancel-modal-button" class="secondary-button">Cancel</button>
+          <button type="submit" id="save-shortcut-button" class="gradient-button">Save Shortcut</button>
+        </div>
+      </form>
+    </section>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <script src="/vendor/Sortable.min.js"></script>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

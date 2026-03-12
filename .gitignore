@@ -1,0 +1,5 @@
+node_modules/
+*.log
+data/shortcuts.json
+uploads/icons/*
+!uploads/icons/.gitkeep

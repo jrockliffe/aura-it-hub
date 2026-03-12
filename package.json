@@ -1,0 +1,15 @@
+{
+  "name": "aura-it-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AURA IT HUB shortcuts service",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.2"
+  }
+}

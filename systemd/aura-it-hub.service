@@ -1,0 +1,17 @@
+[Unit]
+Description=AURA IT HUB shortcuts dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=aurait
+Group=aurait
+WorkingDirectory=/home/aurait/aura-it-hub/hub
+Environment=NODE_ENV=production
+Environment=PORT=3200
+ExecStart=/usr/bin/env node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

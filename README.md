@@ -1,6 +1,6 @@
 # AURA IT HUB
 
-`hub/` is a standalone Node service for the AURA IT HUB shortcuts page.
+This repository is a standalone Node service for the AURA IT HUB shortcuts page.
 
 ## Features
 

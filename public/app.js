@@ -3,6 +3,7 @@ const state = {
   sortable: null,
   dragLockUntil: 0,
   toastTimer: 0,
+  editingShortcutId: "",
 };
 
 const elements = {
@@ -13,6 +14,8 @@ const elements = {
   cancelModalButton: document.getElementById("cancel-modal-button"),
   modal: document.getElementById("shortcut-modal"),
   modalBackdrop: document.getElementById("modal-backdrop"),
+  modalEyebrow: document.getElementById("modal-eyebrow"),
+  modalTitle: document.getElementById("modal-title"),
   form: document.getElementById("shortcut-form"),
   saveButton: document.getElementById("save-shortcut-button"),
   toast: document.getElementById("toast"),
@@ -53,12 +56,56 @@ async function requestJson(url, options) {
   return payload;
 }
 
+function setModalMode(mode, shortcut = null) {
+  const isEditing = mode === "edit" && shortcut;
+  state.editingShortcutId = isEditing ? shortcut.id : "";
+  elements.form.elements.shortcutId.value = state.editingShortcutId;
+  elements.modalEyebrow.textContent = isEditing ? "Edit shortcut" : "Create shortcut";
+  elements.modalTitle.textContent = isEditing ? `Edit ${shortcut.name}` : "Add a new HUB tile";
+  elements.saveButton.textContent = isEditing ? "Save Changes" : "Save Shortcut";
+
+  if (isEditing) {
+    elements.form.elements.name.value = shortcut.name;
+    elements.form.elements.url.value = shortcut.url;
+    elements.form.elements.iconUrl.value = "";
+    elements.form.elements.iconFile.value = "";
+  } else {
+    elements.form.reset();
+  }
+}
+
 function openShortcut(shortcut) {
   if (Date.now() < state.dragLockUntil) {
     return;
   }
 
   window.open(shortcut.url, "_blank", "noopener,noreferrer");
+}
+
+function openModal(mode = "create", shortcut = null) {
+  setModalMode(mode, shortcut);
+  elements.modal.classList.remove("hidden");
+  elements.modalBackdrop.classList.remove("hidden");
+  window.setTimeout(() => {
+    elements.form.elements.name.focus();
+  }, 0);
+}
+
+function closeModal() {
+  elements.modal.classList.add("hidden");
+  elements.modalBackdrop.classList.add("hidden");
+  setModalMode("create");
+}
+
+function upsertShortcut(shortcut) {
+  const existingIndex = state.shortcuts.findIndex((entry) => entry.id === shortcut.id);
+  if (existingIndex >= 0) {
+    state.shortcuts.splice(existingIndex, 1, shortcut);
+  } else {
+    state.shortcuts.push(shortcut);
+  }
+
+  state.shortcuts.sort((left, right) => left.order - right.order);
 }
 
 function createShortcutElement(shortcut) {
@@ -72,11 +119,24 @@ function createShortcutElement(shortcut) {
   card.setAttribute("role", "link");
   card.setAttribute("aria-label", `Open ${shortcut.name}`);
 
+  const actions = document.createElement("div");
+  actions.className = "tile-actions";
+
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.className = "tile-action-button";
+  editButton.setAttribute("aria-label", `Edit ${shortcut.name}`);
+  editButton.textContent = "Edit";
+  editButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openModal("edit", shortcut);
+  });
+
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
-  deleteButton.className = "tile-delete";
+  deleteButton.className = "tile-action-button tile-delete";
   deleteButton.setAttribute("aria-label", `Delete ${shortcut.name}`);
-  deleteButton.textContent = "x";
+  deleteButton.textContent = "Delete";
   deleteButton.addEventListener("click", async (event) => {
     event.stopPropagation();
     if (!window.confirm(`Delete the shortcut "${shortcut.name}"?`)) {
@@ -132,7 +192,8 @@ function createShortcutElement(shortcut) {
   iconFrame.append(image, fallback);
   copy.append(title, host, meta);
   body.append(iconFrame, copy);
-  card.append(deleteButton, body);
+  actions.append(editButton, deleteButton);
+  card.append(actions, body);
 
   card.addEventListener("click", () => openShortcut(shortcut));
   card.addEventListener("keydown", (event) => {
@@ -170,19 +231,6 @@ async function loadShortcuts() {
   renderShortcuts();
 }
 
-function closeModal() {
-  elements.modal.classList.add("hidden");
-  elements.modalBackdrop.classList.add("hidden");
-}
-
-function openModal() {
-  elements.modal.classList.remove("hidden");
-  elements.modalBackdrop.classList.remove("hidden");
-  window.setTimeout(() => {
-    elements.form.elements.name.focus();
-  }, 0);
-}
-
 async function persistOrder() {
   const orderedIds = [...elements.grid.children].map((item) => item.dataset.shortcutId);
   state.shortcuts = await requestJson("/api/shortcuts/order", {
@@ -199,6 +247,8 @@ function initSortable() {
     chosenClass: "shortcut-chosen",
     dragClass: "shortcut-dragging",
     draggable: ".shortcut-item",
+    filter: ".tile-action-button",
+    preventOnFilter: false,
     onStart() {
       document.body.classList.add("sorting");
       const activeCard = document.querySelector(".sortable-drag .shortcut-card");
@@ -230,30 +280,35 @@ async function handleFormSubmit(event) {
   event.preventDefault();
 
   const formData = new FormData(elements.form);
+  const shortcutId = String(formData.get("shortcutId") || "");
+  const isEditing = Boolean(shortcutId);
+  const url = isEditing ? `/api/shortcuts/${shortcutId}` : "/api/shortcuts";
+  const method = isEditing ? "PUT" : "POST";
+  const originalButtonText = isEditing ? "Save Changes" : "Save Shortcut";
+
   elements.saveButton.disabled = true;
   elements.saveButton.textContent = "Saving...";
 
   try {
-    const shortcut = await requestJson("/api/shortcuts", {
-      method: "POST",
+    const shortcut = await requestJson(url, {
+      method,
       body: formData,
     });
 
-    state.shortcuts = [...state.shortcuts, shortcut].sort((left, right) => left.order - right.order);
+    upsertShortcut(shortcut);
     renderShortcuts();
-    elements.form.reset();
     closeModal();
-    showToast("Shortcut saved.");
+    showToast(isEditing ? "Shortcut updated." : "Shortcut saved.");
   } catch (error) {
     showToast(error.message);
   } finally {
     elements.saveButton.disabled = false;
-    elements.saveButton.textContent = "Save Shortcut";
+    elements.saveButton.textContent = originalButtonText;
   }
 }
 
 function bindEvents() {
-  elements.openModalButton.addEventListener("click", openModal);
+  elements.openModalButton.addEventListener("click", () => openModal("create"));
   elements.closeModalButton.addEventListener("click", closeModal);
   elements.cancelModalButton.addEventListener("click", closeModal);
   elements.modalBackdrop.addEventListener("click", closeModal);
@@ -268,6 +323,7 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
+  setModalMode("create");
 
   try {
     await loadShortcuts();

@@ -9,6 +9,7 @@ Group=aurait
 WorkingDirectory=/home/aurait/aura-it-hub
 Environment=NODE_ENV=production
 Environment=PORT=3200
+Environment=AURA_HUB_STORAGE_DIR=/home/aurait/runtime-data/aura-it-hub
 ExecStart=/usr/bin/env node server.js
 Restart=always
 RestartSec=5

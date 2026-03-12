@@ -23,6 +23,7 @@ The service listens on port `3200` by default.
 
 - `data/shortcuts.json`: saved shortcut data
 - `uploads/icons/`: uploaded or fetched icon files
+- Set `AURA_HUB_STORAGE_DIR` in production to keep runtime data outside the deploy folder.
 
 ## systemd
 

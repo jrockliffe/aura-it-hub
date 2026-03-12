@@ -9,9 +9,12 @@ const multer = require("multer");
 
 const PORT = Number.parseInt(process.env.PORT || "3200", 10);
 const ROOT_DIR = __dirname;
-const DATA_DIR = path.join(ROOT_DIR, "data");
+const STORAGE_DIR = process.env.AURA_HUB_STORAGE_DIR
+  ? path.resolve(process.env.AURA_HUB_STORAGE_DIR)
+  : ROOT_DIR;
+const DATA_DIR = path.join(STORAGE_DIR, "data");
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
-const UPLOAD_DIR = path.join(ROOT_DIR, "uploads");
+const UPLOAD_DIR = path.join(STORAGE_DIR, "uploads");
 const ICON_DIR = path.join(UPLOAD_DIR, "icons");
 const SHORTCUTS_FILE = path.join(DATA_DIR, "shortcuts.json");
 const MAX_ICON_BYTES = 4 * 1024 * 1024;
@@ -158,6 +161,19 @@ async function removeIfExists(filePath) {
   }
 }
 
+function isManagedIcon(iconPath) {
+  return String(iconPath || "").startsWith("/uploads/icons/");
+}
+
+async function removeManagedIcon(iconPath) {
+  if (!isManagedIcon(iconPath)) {
+    return;
+  }
+
+  const iconFilePath = path.join(STORAGE_DIR, iconPath.replace(/^\//, "").replace(/\//g, path.sep));
+  await removeIfExists(iconFilePath);
+}
+
 async function saveBufferAsIcon(buffer, shortcutId, baseName, extension) {
   const fileName = `${shortcutId}-${slugify(baseName)}${extension || ".png"}`;
   const filePath = path.join(ICON_DIR, fileName);
@@ -284,7 +300,30 @@ function summarizeShortcut(shortcut) {
     iconSource: shortcut.iconSource,
     order: shortcut.order,
     createdAt: shortcut.createdAt,
+    updatedAt: shortcut.updatedAt || null,
   };
+}
+
+async function buildShortcutIcon({ file, iconUrl, targetUrl, shortcutId, shortcutName }) {
+  if (file) {
+    return {
+      iconPath: await persistUploadedIcon(file, shortcutId, shortcutName),
+      iconSource: "upload",
+    };
+  }
+
+  if (iconUrl) {
+    try {
+      return {
+        iconPath: await downloadIcon(normalizeUrl(iconUrl), shortcutId, shortcutName),
+        iconSource: "external",
+      };
+    } catch (error) {
+      throw new Error("The external icon URL could not be downloaded.");
+    }
+  }
+
+  return resolveSiteIcon(targetUrl, shortcutId, shortcutName);
 }
 
 app.get("/api/health", async (request, response) => {
@@ -308,25 +347,13 @@ app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, 
     const targetUrl = normalizeUrl(request.body.url);
     const externalIconUrl = String(request.body.iconUrl || "").trim();
     const hostname = new URL(targetUrl).hostname.replace(/^www\./, "");
-
-    let iconPath = "";
-    let iconSource = "website";
-
-    if (request.file) {
-      iconPath = await persistUploadedIcon(request.file, shortcutId, name);
-      iconSource = "upload";
-    } else if (externalIconUrl) {
-      try {
-        iconPath = await downloadIcon(normalizeUrl(externalIconUrl), shortcutId, name);
-        iconSource = "external";
-      } catch (error) {
-        throw new Error("The external icon URL could not be downloaded.");
-      }
-    } else {
-      const resolved = await resolveSiteIcon(targetUrl, shortcutId, name);
-      iconPath = resolved.iconPath;
-      iconSource = resolved.iconSource;
-    }
+    const { iconPath, iconSource } = await buildShortcutIcon({
+      file: request.file,
+      iconUrl: externalIconUrl,
+      targetUrl,
+      shortcutId,
+      shortcutName: name,
+    });
 
     const shortcuts = await readShortcuts();
     const shortcut = {
@@ -338,6 +365,7 @@ app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, 
       iconSource,
       order: shortcuts.length,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     shortcuts.push(shortcut);
@@ -348,6 +376,71 @@ app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, 
   } catch (error) {
     if (request.file) {
       const attemptedGlob = `${shortcutId}-${slugify(request.body?.name || "icon")}`;
+      for (const candidate of fsSync.readdirSync(ICON_DIR, { withFileTypes: true })) {
+        if (candidate.isFile() && candidate.name.startsWith(attemptedGlob)) {
+          await removeIfExists(path.join(ICON_DIR, candidate.name));
+        }
+      }
+    }
+    next(error);
+  }
+});
+
+app.put("/api/shortcuts/:shortcutId", upload.single("iconFile"), async (request, response, next) => {
+  try {
+    const shortcutId = request.params.shortcutId;
+    const shortcuts = await readShortcuts();
+    const existingShortcut = shortcuts.find((entry) => entry.id === shortcutId);
+
+    if (!existingShortcut) {
+      response.status(404).json({ error: "Shortcut not found." });
+      return;
+    }
+
+    const name = sanitizeName(request.body.name);
+    const targetUrl = normalizeUrl(request.body.url);
+    const externalIconUrl = String(request.body.iconUrl || "").trim();
+    const hostname = new URL(targetUrl).hostname.replace(/^www\./, "");
+    const websiteSourceChanged = existingShortcut.url !== targetUrl
+      && ["website", "website-fallback"].includes(existingShortcut.iconSource);
+
+    let nextIconPath = existingShortcut.iconPath;
+    let nextIconSource = existingShortcut.iconSource;
+    if (request.file || externalIconUrl || websiteSourceChanged) {
+      const replacement = await buildShortcutIcon({
+        file: request.file,
+        iconUrl: externalIconUrl,
+        targetUrl,
+        shortcutId,
+        shortcutName: name,
+      });
+      nextIconPath = replacement.iconPath;
+      nextIconSource = replacement.iconSource;
+    }
+
+    const updatedShortcut = {
+      ...existingShortcut,
+      name,
+      url: targetUrl,
+      hostname,
+      iconPath: nextIconPath,
+      iconSource: nextIconSource,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const savedShortcuts = await writeShortcuts(shortcuts.map((entry) => (
+      entry.id === shortcutId ? updatedShortcut : entry
+    )));
+
+    if (existingShortcut.iconPath !== nextIconPath) {
+      await removeManagedIcon(existingShortcut.iconPath);
+    }
+
+    const savedShortcut = savedShortcuts.find((entry) => entry.id === shortcutId);
+    response.json(summarizeShortcut(savedShortcut));
+  } catch (error) {
+    if (request.file) {
+      const attemptedGlob = `${request.params.shortcutId}-${slugify(request.body?.name || "icon")}`;
       for (const candidate of fsSync.readdirSync(ICON_DIR, { withFileTypes: true })) {
         if (candidate.isFile() && candidate.name.startsWith(attemptedGlob)) {
           await removeIfExists(path.join(ICON_DIR, candidate.name));
@@ -395,10 +488,7 @@ app.delete("/api/shortcuts/:shortcutId", async (request, response, next) => {
     const remaining = shortcuts.filter((entry) => entry.id !== request.params.shortcutId);
     const savedShortcuts = await writeShortcuts(remaining);
 
-    if (shortcut.iconPath.startsWith("/uploads/icons/")) {
-      const iconFilePath = path.join(ROOT_DIR, shortcut.iconPath.replace(/^\//, "").replace(/\//g, path.sep));
-      await removeIfExists(iconFilePath);
-    }
+    await removeManagedIcon(shortcut.iconPath);
 
     response.json({
       ok: true,

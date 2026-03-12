@@ -43,7 +43,7 @@
       <section class="hero glass-panel">
         <div class="hero-copy">
           <p class="hero-kicker">Shared shortcuts, arranged your way.</p>
-          <h2>Your team links in one calm, glass-like workspace.</h2>
+          <h2>Welcome to AURA IT HUB</h2>
           <p class="hero-text">
             Add shortcuts with a custom icon or let the HUB fetch the website icon
             for you. Drag any tile to reorder the layout.
@@ -81,7 +81,7 @@
     >
       <div class="modal-header">
         <div>
-          <p class="eyebrow">Create shortcut</p>
+          <p class="eyebrow" id="modal-eyebrow">Create shortcut</p>
           <h4 id="modal-title">Add a new HUB tile</h4>
         </div>
         <button type="button" id="close-modal-button" class="close-button" aria-label="Close dialog">
@@ -90,6 +90,7 @@
       </div>
 
       <form id="shortcut-form" class="shortcut-form">
+        <input type="hidden" name="shortcutId" value="">
         <label class="field">
           <span>Shortcut name</span>
           <input type="text" name="name" maxlength="80" placeholder="AURA Remote Support" required>
@@ -113,7 +114,8 @@
         </div>
 
         <p class="field-help">
-          Leave both icon fields empty and AURA IT HUB will fetch the website icon automatically.
+          New shortcuts use the website icon automatically when both fields are empty. When editing,
+          leaving both icon fields empty keeps your current icon unless the website link changes.
         </p>
 
         <div class="modal-actions">

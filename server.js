@@ -181,7 +181,8 @@ async function removeManagedIcon(iconPath) {
 }
 
 async function saveBufferAsIcon(buffer, shortcutId, baseName, extension) {
-  const fileName = `${shortcutId}-${slugify(baseName)}${extension || ".png"}`;
+  const revision = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const fileName = `${shortcutId}-${revision}-${slugify(baseName)}${extension || ".png"}`;
   const filePath = path.join(ICON_DIR, fileName);
   await fs.writeFile(filePath, buffer);
   return {
@@ -347,6 +348,7 @@ app.get("/api/shortcuts", async (request, response, next) => {
 
 app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, next) => {
   const shortcutId = crypto.randomUUID();
+  let createdManagedIconPath = "";
 
   try {
     const name = sanitizeName(request.body.name);
@@ -360,6 +362,7 @@ app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, 
       shortcutId,
       shortcutName: name,
     });
+    createdManagedIconPath = isManagedIcon(iconPath) ? iconPath : "";
 
     const shortcuts = await readShortcuts();
     const shortcut = {
@@ -380,19 +383,13 @@ app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, 
 
     response.status(201).json(summarizeShortcut(savedShortcut));
   } catch (error) {
-    if (request.file) {
-      const attemptedGlob = `${shortcutId}-${slugify(request.body?.name || "icon")}`;
-      for (const candidate of fsSync.readdirSync(ICON_DIR, { withFileTypes: true })) {
-        if (candidate.isFile() && candidate.name.startsWith(attemptedGlob)) {
-          await removeIfExists(path.join(ICON_DIR, candidate.name));
-        }
-      }
-    }
+    await removeManagedIcon(createdManagedIconPath);
     next(error);
   }
 });
 
 app.put("/api/shortcuts/:shortcutId", upload.single("iconFile"), async (request, response, next) => {
+  let createdManagedIconPath = "";
   try {
     const shortcutId = request.params.shortcutId;
     const shortcuts = await readShortcuts();
@@ -422,6 +419,7 @@ app.put("/api/shortcuts/:shortcutId", upload.single("iconFile"), async (request,
       });
       nextIconPath = replacement.iconPath;
       nextIconSource = replacement.iconSource;
+      createdManagedIconPath = isManagedIcon(replacement.iconPath) ? replacement.iconPath : "";
     }
 
     const updatedShortcut = {
@@ -445,14 +443,7 @@ app.put("/api/shortcuts/:shortcutId", upload.single("iconFile"), async (request,
     const savedShortcut = savedShortcuts.find((entry) => entry.id === shortcutId);
     response.json(summarizeShortcut(savedShortcut));
   } catch (error) {
-    if (request.file) {
-      const attemptedGlob = `${request.params.shortcutId}-${slugify(request.body?.name || "icon")}`;
-      for (const candidate of fsSync.readdirSync(ICON_DIR, { withFileTypes: true })) {
-        if (candidate.isFile() && candidate.name.startsWith(attemptedGlob)) {
-          await removeIfExists(path.join(ICON_DIR, candidate.name));
-        }
-      }
-    }
+    await removeManagedIcon(createdManagedIconPath);
     next(error);
   }
 });

@@ -179,7 +179,7 @@ a {
 .gradient-button,
 .secondary-button,
 .close-button,
-.tile-delete {
+.tile-action-button {
   border: 0;
   cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
@@ -196,7 +196,7 @@ a {
 .gradient-button:hover,
 .secondary-button:hover,
 .close-button:hover,
-.tile-delete:hover {
+.tile-action-button:hover {
   transform: translateY(-1px);
 }
 
@@ -432,7 +432,7 @@ a {
   z-index: 2;
   display: flex;
   gap: 8px;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 180ms ease;
 }
 
@@ -445,11 +445,13 @@ a {
   padding: 0.56rem 0.82rem;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-.shortcut-card:hover .tile-actions,
-.shortcut-card:focus-within .tile-actions {
-  opacity: 1;
+.tile-action-button:focus-visible {
+  outline: 2px solid rgba(0, 224, 255, 0.55);
+  outline-offset: 2px;
 }
 
 .shortcut-placeholder .shortcut-card {

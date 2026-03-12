@@ -241,11 +241,17 @@ async function persistOrder() {
 }
 
 function initSortable() {
+  if (typeof Sortable === "undefined") {
+    throw new Error("Drag and drop failed to load.");
+  }
+
   state.sortable = new Sortable(elements.grid, {
     animation: 180,
     ghostClass: "shortcut-placeholder",
     chosenClass: "shortcut-chosen",
     dragClass: "shortcut-dragging",
+    delayOnTouchOnly: true,
+    delay: 120,
     draggable: ".shortcut-item",
     filter: ".tile-action-button",
     preventOnFilter: false,

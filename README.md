@@ -30,6 +30,8 @@ Set these environment variables to protect the hub with Authentik:
 - `AURA_HUB_AUTHENTIK_CLIENT_SECRET=...`
 - `AURA_HUB_PUBLIC_BASE_URL=https://hub.aurait.com.au`
 - `AURA_HUB_SESSION_SECRET=...`
+- `AURA_HUB_GLOW_BASE_URL=https://glow.aurait.com.au`
+- `AURA_HUB_GLOW_SERVICE_KEY=...`
 
 The current systemd unit reads optional runtime overrides from `/etc/default/aura-it-hub`.
 

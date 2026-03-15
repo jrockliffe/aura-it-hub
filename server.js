@@ -20,6 +20,7 @@ const ICON_DIR = path.join(UPLOAD_DIR, "icons");
 const SHORTCUTS_FILE = path.join(DATA_DIR, "shortcuts.json");
 const MAX_ICON_BYTES = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 8000;
+const AUTHORIZATION_REFRESH_MS = 60 * 1000;
 const AUTHENTIK_ENABLED = !["0", "false", "off"].includes(String(process.env.AURA_HUB_AUTHENTIK_ENABLED || "true").trim().toLowerCase());
 const AUTHENTIK_BASE_URL = String(process.env.AURA_HUB_AUTHENTIK_BASE_URL || "").trim().replace(/\/+$/, "");
 const AUTHENTIK_PROVIDER_SLUG = String(process.env.AURA_HUB_AUTHENTIK_PROVIDER_SLUG || "glow").trim() || "glow";
@@ -27,6 +28,8 @@ const AUTHENTIK_CLIENT_ID = String(process.env.AURA_HUB_AUTHENTIK_CLIENT_ID || "
 const AUTHENTIK_CLIENT_SECRET = String(process.env.AURA_HUB_AUTHENTIK_CLIENT_SECRET || "").trim();
 const SESSION_SECRET = String(process.env.AURA_HUB_SESSION_SECRET || "").trim() || crypto.randomBytes(32).toString("hex");
 const PUBLIC_BASE_URL = String(process.env.AURA_HUB_PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
+const GLOW_BASE_URL = String(process.env.AURA_HUB_GLOW_BASE_URL || "https://glow.aurait.com.au").trim().replace(/\/+$/, "");
+const GLOW_SERVICE_KEY = String(process.env.AURA_HUB_GLOW_SERVICE_KEY || "").trim();
 const AUTH_STATE_SESSION_KEY = "authentik_state";
 const AUTH_USER_SESSION_KEY = "authentik_user";
 const AUTH_CALLBACK_PATH = "/auth/callback";
@@ -99,14 +102,104 @@ function currentUser(request) {
   return request.session[AUTH_USER_SESSION_KEY] || null;
 }
 
-function requireAuth(request, response, next) {
+function isGlowAuthorizationConfigured() {
+  return Boolean(GLOW_BASE_URL) && Boolean(GLOW_SERVICE_KEY);
+}
+
+async function loadGlowAuthorization(profile) {
+  if (!isGlowAuthorizationConfigured()) {
+    return {
+      username: String(profile.preferred_username || profile.nickname || profile.email || "").trim(),
+      display_name: String(profile.name || profile.preferred_username || "").trim(),
+      email: String(profile.email || "").trim(),
+      role: "tech",
+      is_admin: false,
+      can_access_hub: true,
+      can_manage_hub: false,
+    };
+  }
+
+  const url = new URL(`${GLOW_BASE_URL}/hub-permissions.php`);
+  url.searchParams.set("username", String(profile.preferred_username || profile.nickname || "").trim());
+  url.searchParams.set("email", String(profile.email || "").trim());
+
+  const response = await fetchWithTimeout(url.toString(), {
+    headers: {
+      accept: "application/json",
+      "x-aura-hub-service-key": GLOW_SERVICE_KEY,
+    },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error("Glow could not confirm your HUB permissions.");
+  }
+
+  return response.json();
+}
+
+function buildAuthorizedSessionUser(profile, authorization) {
+  return {
+    username: String(authorization.username || profile.preferred_username || profile.nickname || profile.email || "").trim(),
+    name: String(authorization.display_name || profile.name || profile.preferred_username || "").trim(),
+    email: String(authorization.email || profile.email || "").trim(),
+    role: String(authorization.role || "").trim().toLowerCase(),
+    isAdmin: Boolean(authorization.is_admin),
+    canManageShortcuts: Boolean(authorization.can_manage_hub),
+    glowAuthorizedAt: Date.now(),
+    authentikUsername: String(profile.preferred_username || profile.nickname || profile.email || "").trim(),
+  };
+}
+
+async function syncGlowAuthorization(request, { force = false } = {}) {
+  const user = currentUser(request);
+  if (!user || !isGlowAuthorizationConfigured()) {
+    return user;
+  }
+
+  const checkedAt = Number.parseInt(String(user.glowAuthorizedAt || "0"), 10);
+  if (!force && Number.isFinite(checkedAt) && checkedAt > 0 && (Date.now() - checkedAt) < AUTHORIZATION_REFRESH_MS) {
+    return user;
+  }
+
+  const profile = {
+    preferred_username: String(user.authentikUsername || user.username || "").trim(),
+    email: String(user.email || "").trim(),
+    name: String(user.name || user.username || "").trim(),
+  };
+
+  const authorization = await loadGlowAuthorization(profile);
+  if (!authorization || !authorization.can_access_hub) {
+    delete request.session[AUTH_USER_SESSION_KEY];
+    return null;
+  }
+
+  const merged = buildAuthorizedSessionUser(profile, authorization);
+  request.session[AUTH_USER_SESSION_KEY] = merged;
+  return merged;
+}
+
+async function requireAuth(request, response, next) {
   if (!isAuthentikConfigured()) {
     next();
     return;
   }
 
   if (currentUser(request)) {
-    next();
+    try {
+      const authorizedUser = await syncGlowAuthorization(request);
+      if (!authorizedUser) {
+        response.redirect("/login");
+        return;
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
     return;
   }
 
@@ -116,6 +209,30 @@ function requireAuth(request, response, next) {
   }
 
   response.redirect("/login");
+}
+
+async function requireManage(request, response, next) {
+  if (!isAuthentikConfigured()) {
+    next();
+    return;
+  }
+
+  try {
+    const user = await syncGlowAuthorization(request);
+    if (!user) {
+      response.status(401).json({ error: "Sign in required.", loginUrl: "/login" });
+      return;
+    }
+
+    if (!user.canManageShortcuts) {
+      response.status(403).json({ error: "Only Glow admins can manage AURA IT HUB shortcuts." });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 function renderLoginPage(errorMessage = "") {
@@ -572,11 +689,12 @@ app.get(AUTH_CALLBACK_PATH, async (request, response) => {
       throw new Error("Authentik did not return a usable username.");
     }
 
-    request.session[AUTH_USER_SESSION_KEY] = {
-      username,
-      name: String(profile.name || username).trim(),
-      email: String(profile.email || "").trim(),
-    };
+    const authorization = await loadGlowAuthorization(profile);
+    if (!authorization || !authorization.can_access_hub) {
+      throw new Error("Your Glow account does not currently have access to AURA IT HUB.");
+    }
+
+    request.session[AUTH_USER_SESSION_KEY] = buildAuthorizedSessionUser(profile, authorization);
     response.redirect("/");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Authentik sign-in failed.";
@@ -597,9 +715,10 @@ app.get(AUTH_LOGOUT_PATH, (request, response, next) => {
 });
 
 app.get("/api/session", requireAuth, (request, response) => {
+  const user = currentUser(request);
   response.json({
     ok: true,
-    user: currentUser(request),
+    user,
     authentikEnabled: isAuthentikConfigured(),
   });
 });
@@ -614,7 +733,7 @@ app.get("/api/shortcuts", async (request, response, next) => {
   }
 });
 
-app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, next) => {
+app.post("/api/shortcuts", requireManage, upload.single("iconFile"), async (request, response, next) => {
   const shortcutId = crypto.randomUUID();
   let createdManagedIconPath = "";
 
@@ -656,7 +775,7 @@ app.post("/api/shortcuts", upload.single("iconFile"), async (request, response, 
   }
 });
 
-app.put("/api/shortcuts/:shortcutId", upload.single("iconFile"), async (request, response, next) => {
+app.put("/api/shortcuts/:shortcutId", requireManage, upload.single("iconFile"), async (request, response, next) => {
   let createdManagedIconPath = "";
   try {
     const shortcutId = request.params.shortcutId;
@@ -716,7 +835,7 @@ app.put("/api/shortcuts/:shortcutId", upload.single("iconFile"), async (request,
   }
 });
 
-app.put("/api/shortcuts/order", async (request, response, next) => {
+app.put("/api/shortcuts/order", requireManage, async (request, response, next) => {
   try {
     const orderedIds = Array.isArray(request.body.orderedIds) ? request.body.orderedIds : [];
     const shortcuts = await readShortcuts();
@@ -743,7 +862,7 @@ app.put("/api/shortcuts/order", async (request, response, next) => {
   }
 });
 
-app.delete("/api/shortcuts/:shortcutId", async (request, response, next) => {
+app.delete("/api/shortcuts/:shortcutId", requireManage, async (request, response, next) => {
   try {
     const shortcuts = await readShortcuts();
     const shortcut = shortcuts.find((entry) => entry.id === request.params.shortcutId);

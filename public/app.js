@@ -5,11 +5,14 @@ const state = {
   dragLockUntil: 0,
   toastTimer: 0,
   editingShortcutId: "",
+  sessionUser: null,
 };
 
 const elements = {
   grid: document.getElementById("shortcuts-grid"),
   emptyState: document.getElementById("empty-state"),
+  sectionNote: document.getElementById("section-note"),
+  emptyText: document.getElementById("empty-text"),
   openModalButton: document.getElementById("open-modal-button"),
   sessionPill: document.getElementById("session-pill"),
   logoutLink: document.getElementById("logout-link"),
@@ -48,6 +51,10 @@ function showToast(message) {
   }, 2800);
 }
 
+function canManageShortcuts() {
+  return !!(state.sessionUser && state.sessionUser.canManageShortcuts);
+}
+
 async function requestJson(url, options) {
   const response = await fetch(url, options);
   const payload = await response.json().catch(() => ({}));
@@ -70,6 +77,8 @@ async function loadSession() {
     return;
   }
 
+  state.sessionUser = user;
+
   if (elements.sessionPill) {
     const label = user.name && user.name !== user.username
       ? `${user.name} · ${user.username}`
@@ -80,6 +89,22 @@ async function loadSession() {
 
   if (elements.logoutLink) {
     elements.logoutLink.classList.remove("hidden");
+  }
+
+  if (elements.openModalButton) {
+    elements.openModalButton.classList.toggle("hidden", !canManageShortcuts());
+  }
+
+  if (elements.sectionNote) {
+    elements.sectionNote.textContent = canManageShortcuts()
+      ? "Drag any tile to move it. Click a tile to open its link."
+      : "Click any tile to open its link.";
+  }
+
+  if (elements.emptyText) {
+    elements.emptyText.textContent = canManageShortcuts()
+      ? "Use the button in the top-right to create your first AURA IT HUB tile."
+      : "AURA IT HUB tiles are managed by Glow admins.";
   }
 }
 
@@ -110,6 +135,11 @@ function openShortcut(shortcut) {
 }
 
 function openModal(mode = "create", shortcut = null) {
+  if (!canManageShortcuts()) {
+    showToast("Only Glow admins can manage AURA IT HUB shortcuts.");
+    return;
+  }
+
   setModalMode(mode, shortcut);
   elements.modal.classList.remove("hidden");
   elements.modalBackdrop.classList.remove("hidden");
@@ -249,7 +279,7 @@ function createShortcutElement(shortcut) {
 
   const meta = document.createElement("p");
   meta.className = "shortcut-meta";
-  meta.textContent = "Drag to reorder";
+  meta.textContent = canManageShortcuts() ? "Drag to reorder" : "Shared shortcut";
 
   const toolbar = document.createElement("div");
   toolbar.className = "shortcut-toolbar";
@@ -280,11 +310,19 @@ function createShortcutElement(shortcut) {
   });
 
   iconFrame.append(image, fallback);
-  toolbar.append(toolbarEdit, toolbarDelete);
-  copy.append(title, host, meta, toolbar);
+  if (canManageShortcuts()) {
+    toolbar.append(toolbarEdit, toolbarDelete);
+    copy.append(title, host, meta, toolbar);
+    actions.append(editButton, deleteButton);
+  } else {
+    copy.append(title, host, meta);
+  }
   body.append(iconFrame, copy);
-  actions.append(editButton, deleteButton);
-  card.append(actions, body);
+  if (canManageShortcuts()) {
+    card.append(actions, body);
+  } else {
+    card.append(body);
+  }
 
   card.addEventListener("click", () => openShortcut(shortcut));
   card.addEventListener("keydown", (event) => {
@@ -311,6 +349,14 @@ function renderShortcuts() {
   state.shortcuts.forEach((shortcut) => {
     elements.grid.append(createShortcutElement(shortcut));
   });
+
+  if (!canManageShortcuts()) {
+    if (state.sortable) {
+      state.sortable.destroy();
+      state.sortable = null;
+    }
+    return;
+  }
 
   if (!state.sortable) {
     ensureSortableLoaded()
@@ -386,6 +432,11 @@ function initSortable() {
 
 async function handleFormSubmit(event) {
   event.preventDefault();
+
+  if (!canManageShortcuts()) {
+    showToast("Only Glow admins can manage AURA IT HUB shortcuts.");
+    return;
+  }
 
   const formData = new FormData(elements.form);
   const shortcutId = String(formData.get("shortcutId") || "");

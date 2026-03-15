@@ -38,7 +38,7 @@
         <div class="topbar-actions">
           <div id="session-pill" class="session-pill hidden" aria-live="polite"></div>
           <a id="logout-link" class="secondary-button topbar-link hidden" href="/auth/logout">Sign out</a>
-          <button type="button" id="open-modal-button" class="gradient-button">
+          <button type="button" id="open-modal-button" class="gradient-button hidden">
             Add Shortcut
           </button>
         </div>
@@ -60,12 +60,12 @@
             <p class="eyebrow">Workspace</p>
             <h3>Shortcuts</h3>
           </div>
-          <p class="section-note">Drag any tile to move it. Click a tile to open its link.</p>
+          <p id="section-note" class="section-note">Drag any tile to move it. Click a tile to open its link.</p>
         </div>
 
         <div id="empty-state" class="empty-state glass-panel hidden">
           <p class="empty-title">No shortcuts yet.</p>
-          <p class="empty-text">
+          <p id="empty-text" class="empty-text">
             Use the button in the top-right to create your first AURA IT HUB tile.
           </p>
         </div>

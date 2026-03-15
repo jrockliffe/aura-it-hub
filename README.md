@@ -19,6 +19,20 @@ npm start
 
 The service listens on port `3200` by default.
 
+## Authentik SSO
+
+Set these environment variables to protect the hub with Authentik:
+
+- `AURA_HUB_AUTHENTIK_ENABLED=true`
+- `AURA_HUB_AUTHENTIK_BASE_URL=https://auth.aurait.com.au`
+- `AURA_HUB_AUTHENTIK_PROVIDER_SLUG=glow`
+- `AURA_HUB_AUTHENTIK_CLIENT_ID=...`
+- `AURA_HUB_AUTHENTIK_CLIENT_SECRET=...`
+- `AURA_HUB_PUBLIC_BASE_URL=https://hub.aurait.com.au`
+- `AURA_HUB_SESSION_SECRET=...`
+
+The current systemd unit reads optional runtime overrides from `/etc/default/aura-it-hub`.
+
 ## Runtime Files
 
 - `data/shortcuts.json`: saved shortcut data

@@ -142,6 +142,14 @@ a {
   z-index: 10;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -178,6 +186,7 @@ a {
 
 .gradient-button,
 .secondary-button,
+.topbar-link,
 .close-button,
 .tile-action-button {
   border: 0;
@@ -203,6 +212,28 @@ a {
 .gradient-button:disabled {
   cursor: wait;
   opacity: 0.7;
+}
+
+.session-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0.78rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #eef4ff;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+}
+
+.session-pill::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(0, 224, 255, 0.98), rgba(139, 92, 246, 0.98));
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
 }
 
 .hero {
@@ -506,12 +537,14 @@ a {
 }
 
 .close-button,
-.secondary-button {
+.secondary-button,
+.topbar-link {
   padding: 0.88rem 1.08rem;
   border-radius: 999px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  text-decoration: none;
 }
 
 .shortcut-form {
@@ -597,6 +630,11 @@ a {
     display: grid;
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .hero,

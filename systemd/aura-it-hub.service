@@ -7,6 +7,7 @@ Type=simple
 User=aurait
 Group=aurait
 WorkingDirectory=/home/aurait/aura-it-hub
+EnvironmentFile=-/etc/default/aura-it-hub
 Environment=NODE_ENV=production
 Environment=PORT=3200
 Environment=AURA_HUB_STORAGE_DIR=/home/aurait/runtime-data/aura-it-hub

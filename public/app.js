@@ -11,6 +11,8 @@ const elements = {
   grid: document.getElementById("shortcuts-grid"),
   emptyState: document.getElementById("empty-state"),
   openModalButton: document.getElementById("open-modal-button"),
+  sessionPill: document.getElementById("session-pill"),
+  logoutLink: document.getElementById("logout-link"),
   closeModalButton: document.getElementById("close-modal-button"),
   cancelModalButton: document.getElementById("cancel-modal-button"),
   modal: document.getElementById("shortcut-modal"),
@@ -51,10 +53,34 @@ async function requestJson(url, options) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401 && payload.loginUrl) {
+      window.location.assign(payload.loginUrl);
+      throw new Error("Redirecting to sign in...");
+    }
     throw new Error(payload.error || "Something went wrong.");
   }
 
   return payload;
+}
+
+async function loadSession() {
+  const payload = await requestJson("/api/session");
+  const user = payload && payload.user ? payload.user : null;
+  if (!user) {
+    return;
+  }
+
+  if (elements.sessionPill) {
+    const label = user.name && user.name !== user.username
+      ? `${user.name} · ${user.username}`
+      : user.username;
+    elements.sessionPill.textContent = label;
+    elements.sessionPill.classList.remove("hidden");
+  }
+
+  if (elements.logoutLink) {
+    elements.logoutLink.classList.remove("hidden");
+  }
 }
 
 function setModalMode(mode, shortcut = null) {
@@ -408,9 +434,12 @@ async function init() {
   setModalMode("create");
 
   try {
+    await loadSession();
     await loadShortcuts();
   } catch (error) {
-    showToast(error.message);
+    if (error.message !== "Redirecting to sign in...") {
+      showToast(error.message);
+    }
   }
 }
 
